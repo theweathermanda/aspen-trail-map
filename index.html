@@ -59,7 +59,7 @@
 
     <div class="row">
       <label><input type="checkbox" id="trOn" checked> COTREX trails</label>
-      <label style="font-weight:400;margin-left:24px"><input type="checkbox" id="hikeOnly" checked> Hiking-allowed only</label>
+      <label style="font-weight:400;margin-left:24px"><input type="checkbox" id="hikeOnly"> Hiking-allowed only</label>
       <small>Loads at zoom 11+ · names show at zoom 13+</small>
     </div>
 
@@ -174,7 +174,7 @@ const trailPopupHtml = p => {
     ${p.url ? `<br><a href="${p.url}" target="_blank" rel="noopener">More info</a>` : ''}`;
 };
 const trails = L.esri.featureLayer({
-  url: TR_URL, minZoom: 11, where: "hiking = 'yes'",
+  url: TR_URL, minZoom: 11, where: '1=1',
   style: () => trailStyle,
   fields: ['FID','name','surface','hiking','length_mi_','min_elevat','max_elevat','manager','url'],
   attribution: 'Colorado Parks & Wildlife COTREX'

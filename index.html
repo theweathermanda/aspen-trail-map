@@ -24,7 +24,7 @@
   select { width:100%; padding:4px; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:6px; }
   .legend { display:flex; align-items:center; gap:6px; font-size:12px; margin-left:24px; color:var(--muted); }
   .sw { width:14px; height:10px; border-radius:2px; display:inline-block; }
-  .ramp { height:10px; width:120px; border-radius:2px; background:linear-gradient(90deg,#3a0ca3,#7209b7,#e91e8c,#ff6d00,#ffd60a); }
+  .ramp { height:10px; width:120px; border-radius:2px; background:linear-gradient(90deg,#000004,#420a68,#932667,#dd513a,#fca50a,#fcffa4); }
   #status { font-size:12px; color:var(--muted); margin-top:6px; }
   .leaflet-popup-content { font-size:13px; }
   .trail-label { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:4px;
@@ -65,7 +65,7 @@
 
     <div class="row">
       <label><input type="checkbox" id="thOn" checked> Trailheads</label>
-      <div class="legend"><span class="sw" style="background:#14213d;border-radius:50%"></span>Parking / trailhead</div>
+      <div class="legend"><span class="sw" style="background:#063563;border-radius:50%"></span>Parking / trailhead</div>
       <small>Shows at zoom 12+</small>
     </div>
 
@@ -99,18 +99,18 @@ const TR_URL  = 'https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/ArcGIS/rest/servi
 const TH_URL  = 'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/29';
 
 // Aspen basal area: bin the continuous ft²/acre values into 8 graduated
-// classes, then color those classes with a high-contrast indigo→gold ramp
-// (nothing in this palette appears in the basemaps below, so it reads
-// clearly over topo greens/tans and satellite imagery alike).
+// classes, colored with the matplotlib "inferno" ramp (black → purple →
+// red-orange → pale yellow). Distinct from every basemap's palette, so
+// it reads clearly over topo greens/tans and satellite imagery alike.
 const BA_RAMP = [
-  [1, 58, 12, 163],   // 1–20   indigo
-  [2, 106, 15, 189],  // 20–40  purple
-  [3, 149, 20, 190],  // 40–60  violet
-  [4, 199, 24, 163],  // 60–80  magenta-violet
-  [5, 233, 30, 140],  // 80–100 magenta
-  [6, 255, 87, 51],   // 100–140 red-orange
-  [7, 255, 140, 0],   // 140–200 orange
-  [8, 255, 214, 10]   // 200+   gold
+  [1, 0, 0, 4],       // 1–20    near-black
+  [2, 40, 11, 84],    // 20–40   deep purple
+  [3, 101, 21, 110],  // 40–60   purple-magenta
+  [4, 159, 42, 99],   // 60–80   magenta-red
+  [5, 212, 72, 66],   // 80–100  red-orange
+  [6, 245, 125, 21],  // 100–140 orange
+  [7, 250, 193, 39],  // 140–200 amber
+  [8, 252, 255, 164]  // 200+    pale yellow
 ];
 const baRule = {
   rasterFunction: 'Colormap',
@@ -157,7 +157,7 @@ const evtLayer = L.esri.imageMapLayer({
 });
 
 // COTREX trails
-const trailStyle = { color:'#b3261e', weight:2.2, opacity:0.9 };
+const trailStyle = { color:'#063563', weight:2.2, opacity:0.65 };
 const trails = L.esri.featureLayer({
   url: TR_URL, minZoom: 11, where: "hiking = 'yes'",
   style: () => trailStyle,
@@ -185,11 +185,11 @@ trails.on('createfeature', e => {
 
 // ---- Trailheads (point icons)
 const trailheadSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="34" viewBox="0 0 26 34">
-  <path d="M13 0C5.8 0 0 5.8 0 13c0 9.5 13 21 13 21s13-11.5 13-21C26 5.8 20.2 0 13 0z" fill="#14213d"/>
+  <path d="M13 0C5.8 0 0 5.8 0 13c0 9.5 13 21 13 21s13-11.5 13-21C26 5.8 20.2 0 13 0z" fill="#063563"/>
   <circle cx="13" cy="13" r="9" fill="#ffffff"/>
   <path d="M9.3 6.2h3.4v4.4c1.9.4 3.3 2 3.3 3.9v.6h2.4c1.1 0 2.1.6 2.6 1.6l.5 1
            c.3.6-.1 1.3-.8 1.3H8.6c-.7 0-1.3-.6-1.3-1.3V7.5c0-.7.5-1.3 1.2-1.3z
-           M8.8 15.2h9.4" fill="#14213d" stroke="#14213d" stroke-width="0" />
+           M8.8 15.2h9.4" fill="#063563" stroke="#063563" stroke-width="0" />
   <path d="M8.8 15.4h9.6" stroke="#ffffff" stroke-width="0.9" fill="none"/>
 </svg>`;
 const trailheadIcon = L.icon({

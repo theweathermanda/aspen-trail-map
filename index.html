@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colorado Aspen & Trails</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/esri-leaflet@3.0.12/dist/esri-leaflet.js"></script>
+<style>
+  :root { --bg:#fff; --fg:#1d2320; --muted:#5f6b64; --panel:rgba(255,255,255,.95); --line:#d9dfdb; --accent:#c98a0b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111513; --fg:#e8ece9; --muted:#9aa59f; --panel:rgba(22,27,24,.94); --line:#2f3833; --accent:#f0b429; } }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,-apple-system,sans-serif; }
+  #map { position:absolute; inset:0; }
+  .panel { position:absolute; z-index:1000; top:10px; right:10px; width:270px; max-width:calc(100vw - 32px); background:var(--panel);
+           border:1px solid var(--line); border-radius:10px; padding:12px 14px; box-shadow:0 4px 18px rgba(0,0,0,.18); }
+  .panel h1 { font-size:15px; margin:0 0 2px; }
+  .panel .sub { color:var(--muted); font-size:12px; margin-bottom:8px; }
+  .panel summary { cursor:pointer; font-weight:600; }
+  .row { margin:10px 0; }
+  .row label { display:flex; align-items:center; gap:8px; font-weight:600; }
+  .row input[type=range] { width:100%; }
+  .row small { color:var(--muted); display:block; margin-left:24px; }
+  select { width:100%; padding:4px; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:6px; }
+  .legend { display:flex; align-items:center; gap:6px; font-size:12px; margin-left:24px; color:var(--muted); }
+  .sw { width:14px; height:10px; border-radius:2px; display:inline-block; }
+  .ramp { height:10px; width:120px; border-radius:2px; background:linear-gradient(90deg,#fff7bc,#fec44f,#d95f0e,#7f2704); }
+  #status { font-size:12px; color:var(--muted); margin-top:6px; }
+  .leaflet-popup-content { font-size:13px; }
+  @media (max-width:600px) { .panel { top:auto; bottom:18px; right:16px; left:16px; width:auto; } }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="panel">
+  <details open>
+    <summary>Colorado Aspen & Trails</summary>
+    <div class="sub">Tap the map for aspen values at a point.</div>
+
+    <div class="row">
+      <label><input type="checkbox" id="baOn" checked> Aspen density (basal area)</label>
+      <div class="legend"><span>low</span><span class="ramp"></span><span>high</span></div>
+      <small>USFS ITSP, 30 m, ft²/acre (~2002 vintage)</small>
+      <input type="range" id="baOp" min="0" max="1" step="0.05" value="0.7">
+    </div>
+
+    <div class="row">
+      <label><input type="checkbox" id="evtOn"> Aspen stands (LANDFIRE 2024)</label>
+      <div class="legend"><span class="sw" style="background:#f2b705"></span>Aspen <span class="sw" style="background:#2e8b57"></span>Aspen–mixed conifer</div>
+      <small>LANDFIRE EVT classes 7011 & 7061, 30 m</small>
+      <input type="range" id="evtOp" min="0" max="1" step="0.05" value="0.75">
+    </div>
+
+    <div class="row">
+      <label><input type="checkbox" id="trOn" checked> COTREX trails</label>
+      <label style="font-weight:400;margin-left:24px"><input type="checkbox" id="hikeOnly" checked> Hiking-allowed only</label>
+      <small>Loads at zoom 11+</small>
+    </div>
+
+    <div class="row">
+      <select id="base">
+        <option value="topo">USGS Topo</option>
+        <option value="img">Satellite imagery</option>
+        <option value="otm">OpenTopoMap</option>
+      </select>
+    </div>
+    <div id="status"></div>
+  </details>
+</div>
+
+<script>
+const map = L.map('map', { zoomControl:true }).setView([39.0, -106.3], 8);
+
+// ---- Basemaps
+const bases = {
+  topo: L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}', { maxZoom:16, attribution:'USGS The National Map' }),
+  img:  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19, attribution:'Esri, Maxar, Earthstar' }),
+  otm:  L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom:17, attribution:'© OpenStreetMap, SRTM | OpenTopoMap' })
+};
+let base = bases.topo.addTo(map);
+document.getElementById('base').onchange = e => { map.removeLayer(base); base = bases[e.target.value].addTo(map); base.bringToBack(); };
+
+// ---- Services
+const BA_URL  = 'https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/USFS_EDW_FHP_TreeSpeciesMetrics_BasalArea/ImageServer';
+const EVT_URL = 'https://lfps.usgs.gov/arcgis/rest/services/Landfire_LF2024/LF2024_EVT_CONUS/ImageServer';
+const TR_URL  = 'https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/ArcGIS/rest/services/CPWAdminData/FeatureServer/15';
+
+// Aspen basal area: server-side raster function template for quaking aspen
+const baLayer = L.esri.imageMapLayer({
+  url: BA_URL, format:'png32', f:'image', opacity:0.7,
+  renderingRule: { rasterFunction: 'quaking_aspen' },
+  attribution: 'USDA Forest Service FHAAST ITSP'
+}).addTo(map);
+
+// LANDFIRE EVT: remap aspen classes -> 1,2; everything else -> NoData (transparent)
+const evtRule = {
+  rasterFunction: 'Colormap',
+  rasterFunctionArguments: {
+    Colormap: [[1, 242,183,5], [2, 46,139,87]],
+    Raster: {
+      rasterFunction: 'Remap',
+      rasterFunctionArguments: {
+        InputRanges:  [7011, 7012, 7061, 7062],   // [min, max) pairs
+        OutputValues: [1, 2],
+        AllowUnmatched: false
+      },
+      outputPixelType: 'U8'
+    }
+  }
+};
+const evtLayer = L.esri.imageMapLayer({
+  url: EVT_URL, format:'png32', f:'image', opacity:0.75,
+  renderingRule: evtRule, attribution: 'LANDFIRE (USGS/USFS)'
+});
+
+// COTREX trails
+const trailStyle = { color:'#b3261e', weight:2.2, opacity:0.9 };
+const trails = L.esri.featureLayer({
+  url: TR_URL, minZoom: 11, where: "hiking = 'yes'",
+  style: () => trailStyle,
+  fields: ['FID','name','surface','hiking','length_mi_','min_elevat','max_elevat','manager','url'],
+  attribution: 'Colorado Parks & Wildlife COTREX'
+}).addTo(map);
+trails.bindPopup(l => {
+  const p = l.feature.properties, ft = v => v != null ? Math.round(v).toLocaleString() + ' ft' : '—';
+  return `<b>${p.name || 'Unnamed trail'}</b><br>
+    Segment: ${p.length_mi_ != null ? p.length_mi_.toFixed(2) + ' mi' : '—'}<br>
+    Elevation: ${ft(p.min_elevat)} – ${ft(p.max_elevat)}<br>
+    Surface: ${p.surface || '—'} · Manager: ${p.manager || '—'}
+    ${p.url ? `<br><a href="${p.url}" target="_blank" rel="noopener">More info</a>` : ''}`;
+});
+
+// ---- Controls
+const bind = (chk, layer, op) => {
+  document.getElementById(chk).onchange = e => e.target.checked ? layer.addTo(map) : map.removeLayer(layer);
+  if (op) document.getElementById(op).oninput = e => layer.setOpacity(+e.target.value);
+};
+bind('baOn', baLayer, 'baOp'); bind('evtOn', evtLayer, 'evtOp'); bind('trOn', trails);
+document.getElementById('hikeOnly').onchange = e => trails.setWhere(e.target.checked ? "hiking = 'yes'" : '1=1');
+
+const status = document.getElementById('status');
+const zoomNote = () => status.textContent = map.getZoom() < 11 ? 'Zoom in to see trails.' : '';
+map.on('zoomend', zoomNote); zoomNote();
+
+// ---- Click: identify aspen values at point
+const EVT_NAMES = { 7011:'Rocky Mountain Aspen Forest & Woodland', 7061:'Inter-Mountain Basins Aspen–Mixed Conifer' };
+async function identify(url, latlng, rule) {
+  const q = new URLSearchParams({
+    geometry: JSON.stringify({ x: latlng.lng, y: latlng.lat, spatialReference: { wkid: 4326 } }),
+    geometryType: 'esriGeometryPoint', returnGeometry: 'false', returnCatalogItems: 'false', f: 'json'
+  });
+  if (rule) q.set('renderingRule', JSON.stringify(rule));
+  const r = await fetch(`${url}/identify?${q}`);
+  const j = await r.json();
+  return j.value;
+}
+map.on('click', async e => {
+  if (e.originalEvent.target.closest('.leaflet-interactive')) return; // trail popup handles its own clicks
+  const pop = L.popup().setLatLng(e.latlng).setContent('Checking…').openOn(map);
+  const [ba, evt] = await Promise.allSettled([
+    identify(BA_URL, e.latlng, { rasterFunction: 'quaking_aspen' }),
+    identify(EVT_URL, e.latlng)
+  ]);
+  const baTxt = ba.status === 'fulfilled' && ba.value != null && ba.value !== 'NoData'
+    ? `${(+ba.value).toFixed(1)} ft²/acre` : 'unavailable';
+  let evtTxt = 'unavailable';
+  if (evt.status === 'fulfilled' && evt.value != null) {
+    const code = parseInt(evt.value, 10);
+    evtTxt = EVT_NAMES[code] ? `<b>${EVT_NAMES[code]}</b>` : `Not aspen (EVT ${code})`;
+  }
+  pop.setContent(`<b>Aspen basal area:</b> ${baTxt}<br><b>LANDFIRE type:</b> ${evtTxt}
+    <br><small>${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}</small>`);
+});
+
+L.control.scale({ imperial:true, metric:true }).addTo(map);
+</script>
+</body>
+</html>

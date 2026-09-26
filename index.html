@@ -44,14 +44,14 @@
     <div class="sub">Tap the map for aspen values at a point.</div>
 
     <div class="row">
-      <label><input type="checkbox" id="baOn" checked> Aspen density (basal area)</label>
+      <label><input type="checkbox" id="baOn"> Aspen density (basal area)</label>
       <div class="legend"><span>low</span><span class="ramp"></span><span>high</span></div>
       <small>USFS ITSP, 30 m, ft²/acre (~2002 vintage)</small>
       <input type="range" id="baOp" min="0" max="1" step="0.05" value="0.7">
     </div>
 
     <div class="row">
-      <label><input type="checkbox" id="evtOn"> Aspen stands (LANDFIRE 2024)</label>
+      <label><input type="checkbox" id="evtOn" checked> Aspen stands (LANDFIRE 2024)</label>
       <div class="legend"><span class="sw" style="background:#b7410e"></span>Aspen <span class="sw" style="background:#0c694d"></span>Aspen–mixed conifer</div>
       <small>LANDFIRE EVT classes 7011 & 7061, 30 m</small>
       <input type="range" id="evtOp" min="0" max="1" step="0.05" value="0.85">
@@ -139,7 +139,7 @@ const baLayer = L.esri.imageMapLayer({
   url: BA_URL, format:'png32', f:'image', opacity:0.7, pane:'rasterPane',
   renderingRule: baRule,
   attribution: 'USDA Forest Service FHAAST ITSP'
-}).addTo(map);
+});
 
 // LANDFIRE EVT: remap aspen classes -> 1,2; everything else -> NoData (transparent).
 // Colors chosen to stay clear of the greens/tans/grays in every basemap option.
@@ -161,7 +161,7 @@ const evtRule = {
 const evtLayer = L.esri.imageMapLayer({
   url: EVT_URL, format:'png32', f:'image', opacity:0.85, pane:'rasterPane',
   renderingRule: evtRule, attribution: 'LANDFIRE (USGS/USFS)'
-});
+}).addTo(map);
 
 // COTREX trails
 const trailStyle = { color:'#2974DC', weight:3, opacity:0.65 };

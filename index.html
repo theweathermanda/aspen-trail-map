@@ -83,6 +83,13 @@
 <script>
 const map = L.map('map', { zoomControl:true }).setView([39.0, -106.3], 8);
 
+// Raster imagery (basal-area + LANDFIRE) lives in its own pane, pinned below the
+// default overlayPane that trails/trailheads use — so the trail layer always stays
+// on top for both display and clicks, even though the raster <img> elements get
+// re-appended to the DOM on every pan/zoom refresh.
+map.createPane('rasterPane');
+map.getPane('rasterPane').style.zIndex = 350;
+
 // ---- Basemaps
 const bases = {
   topo: L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}', { maxZoom:16, attribution:'USGS The National Map' }),
@@ -129,7 +136,7 @@ const baRule = {
   }
 };
 const baLayer = L.esri.imageMapLayer({
-  url: BA_URL, format:'png32', f:'image', opacity:0.7,
+  url: BA_URL, format:'png32', f:'image', opacity:0.7, pane:'rasterPane',
   renderingRule: baRule,
   attribution: 'USDA Forest Service FHAAST ITSP'
 }).addTo(map);
@@ -152,26 +159,27 @@ const evtRule = {
   }
 };
 const evtLayer = L.esri.imageMapLayer({
-  url: EVT_URL, format:'png32', f:'image', opacity:0.85,
+  url: EVT_URL, format:'png32', f:'image', opacity:0.85, pane:'rasterPane',
   renderingRule: evtRule, attribution: 'LANDFIRE (USGS/USFS)'
 });
 
 // COTREX trails
 const trailStyle = { color:'#2974DC', weight:3, opacity:0.65 };
+const trailPopupHtml = p => {
+  const ft = v => v != null ? Math.round(v).toLocaleString() + ' ft' : '—';
+  return `<b>${p.name || 'Unnamed trail'}</b><br>
+    Segment: ${p.length_mi_ != null ? p.length_mi_.toFixed(2) + ' mi' : '—'}<br>
+    Elevation: ${ft(p.min_elevat)} – ${ft(p.max_elevat)}<br>
+    Surface: ${p.surface || '—'} · Manager: ${p.manager || '—'}
+    ${p.url ? `<br><a href="${p.url}" target="_blank" rel="noopener">More info</a>` : ''}`;
+};
 const trails = L.esri.featureLayer({
   url: TR_URL, minZoom: 11, where: "hiking = 'yes'",
   style: () => trailStyle,
   fields: ['FID','name','surface','hiking','length_mi_','min_elevat','max_elevat','manager','url'],
   attribution: 'Colorado Parks & Wildlife COTREX'
 }).addTo(map);
-trails.bindPopup(l => {
-  const p = l.feature.properties, ft = v => v != null ? Math.round(v).toLocaleString() + ' ft' : '—';
-  return `<b>${p.name || 'Unnamed trail'}</b><br>
-    Segment: ${p.length_mi_ != null ? p.length_mi_.toFixed(2) + ' mi' : '—'}<br>
-    Elevation: ${ft(p.min_elevat)} – ${ft(p.max_elevat)}<br>
-    Surface: ${p.surface || '—'} · Manager: ${p.manager || '—'}
-    ${p.url ? `<br><a href="${p.url}" target="_blank" rel="noopener">More info</a>` : ''}`;
-});
+trails.bindPopup(l => trailPopupHtml(l.feature.properties));
 
 // Trail name labels — bound to every trail feature, but kept invisible
 // until the map is zoomed in enough to read them (toggled via CSS below).
@@ -181,6 +189,20 @@ trails.on('createfeature', e => {
   if (layer && name) {
     layer.bindTooltip(name, { permanent:true, direction:'center', className:'trail-label', sticky:false });
   }
+});
+
+// A much wider, fully invisible line drawn under each trail, so tapping/clicking
+// near a trail (not just exactly on its thin visual stroke) opens its popup.
+// Rebuilt from whatever's currently loaded every time the layer reloads (pan,
+// zoom, or the "hiking-allowed only" filter toggling), so it never goes stale.
+const trailHits = L.layerGroup().addTo(map);
+trails.on('load', () => {
+  trailHits.clearLayers();
+  trails.eachFeature(layer => {
+    L.geoJSON(layer.feature, { style: () => ({ color:'#000', weight:22, opacity:0 }) })
+      .bindPopup(trailPopupHtml(layer.feature.properties))
+      .addTo(trailHits);
+  });
 });
 
 // ---- Trailheads (point icons)
@@ -226,7 +248,11 @@ const bind = (chk, layer, op) => {
   document.getElementById(chk).onchange = e => e.target.checked ? layer.addTo(map) : map.removeLayer(layer);
   if (op) document.getElementById(op).oninput = e => layer.setOpacity(+e.target.value);
 };
-bind('baOn', baLayer, 'baOp'); bind('evtOn', evtLayer, 'evtOp'); bind('trOn', trails);
+bind('baOn', baLayer, 'baOp'); bind('evtOn', evtLayer, 'evtOp');
+document.getElementById('trOn').onchange = e => {
+  if (e.target.checked) { trails.addTo(map); trailHits.addTo(map); }
+  else { map.removeLayer(trails); map.removeLayer(trailHits); }
+};
 document.getElementById('thOn').onchange = e => e.target.checked ? trailheads.addTo(map) : map.removeLayer(trailheads);
 document.getElementById('hikeOnly').onchange = e => trails.setWhere(e.target.checked ? "hiking = 'yes'" : '1=1');
 

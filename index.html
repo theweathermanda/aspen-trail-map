@@ -24,7 +24,7 @@
   select { width:100%; padding:4px; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:6px; }
   .legend { display:flex; align-items:center; gap:6px; font-size:12px; margin-left:24px; color:var(--muted); }
   .sw { width:14px; height:10px; border-radius:2px; display:inline-block; }
-  .ramp { height:10px; width:120px; border-radius:2px; background:linear-gradient(90deg,#fff7bc,#fec44f,#d95f0e,#7f2704); }
+  .ramp { height:10px; width:120px; border-radius:2px; background:linear-gradient(90deg,#3a0ca3,#7209b7,#e91e8c,#ff6d00,#ffd60a); }
   #status { font-size:12px; color:var(--muted); margin-top:6px; }
   .leaflet-popup-content { font-size:13px; }
   @media (max-width:600px) { .panel { top:auto; bottom:18px; right:16px; left:16px; width:auto; } }
@@ -47,9 +47,9 @@
 
     <div class="row">
       <label><input type="checkbox" id="evtOn"> Aspen stands (LANDFIRE 2024)</label>
-      <div class="legend"><span class="sw" style="background:#f2b705"></span>Aspen <span class="sw" style="background:#2e8b57"></span>Aspen–mixed conifer</div>
+      <div class="legend"><span class="sw" style="background:#e91e8c"></span>Aspen <span class="sw" style="background:#00c8ff"></span>Aspen–mixed conifer</div>
       <small>LANDFIRE EVT classes 7011 & 7061, 30 m</small>
-      <input type="range" id="evtOp" min="0" max="1" step="0.05" value="0.75">
+      <input type="range" id="evtOp" min="0" max="1" step="0.05" value="0.85">
     </div>
 
     <div class="row">
@@ -86,18 +86,48 @@ const BA_URL  = 'https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/U
 const EVT_URL = 'https://lfps.usgs.gov/arcgis/rest/services/Landfire_LF2024/LF2024_EVT_CONUS/ImageServer';
 const TR_URL  = 'https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/ArcGIS/rest/services/CPWAdminData/FeatureServer/15';
 
-// Aspen basal area: server-side raster function template for quaking aspen
+// Aspen basal area: bin the continuous ft²/acre values into 8 graduated
+// classes, then color those classes with a high-contrast indigo→gold ramp
+// (nothing in this palette appears in the basemaps below, so it reads
+// clearly over topo greens/tans and satellite imagery alike).
+const BA_RAMP = [
+  [1, 58, 12, 163],   // 1–20   indigo
+  [2, 106, 15, 189],  // 20–40  purple
+  [3, 149, 20, 190],  // 40–60  violet
+  [4, 199, 24, 163],  // 60–80  magenta-violet
+  [5, 233, 30, 140],  // 80–100 magenta
+  [6, 255, 87, 51],   // 100–140 red-orange
+  [7, 255, 140, 0],   // 140–200 orange
+  [8, 255, 214, 10]   // 200+   gold
+];
+const baRule = {
+  rasterFunction: 'Colormap',
+  rasterFunctionArguments: {
+    Colormap: BA_RAMP,
+    Raster: {
+      rasterFunction: 'Remap',
+      rasterFunctionArguments: {
+        Raster: { rasterFunction: 'quaking_aspen' },
+        InputRanges: [1,20, 20,40, 40,60, 60,80, 80,100, 100,140, 140,200, 200,1200],
+        OutputValues: [1,2,3,4,5,6,7,8],
+        AllowUnmatched: false
+      },
+      outputPixelType: 'U8'
+    }
+  }
+};
 const baLayer = L.esri.imageMapLayer({
   url: BA_URL, format:'png32', f:'image', opacity:0.7,
-  renderingRule: { rasterFunction: 'quaking_aspen' },
+  renderingRule: baRule,
   attribution: 'USDA Forest Service FHAAST ITSP'
 }).addTo(map);
 
-// LANDFIRE EVT: remap aspen classes -> 1,2; everything else -> NoData (transparent)
+// LANDFIRE EVT: remap aspen classes -> 1,2; everything else -> NoData (transparent).
+// Colors chosen to stay clear of the greens/tans/grays in every basemap option.
 const evtRule = {
   rasterFunction: 'Colormap',
   rasterFunctionArguments: {
-    Colormap: [[1, 242,183,5], [2, 46,139,87]],
+    Colormap: [[1, 233,30,140], [2, 0,200,255]],
     Raster: {
       rasterFunction: 'Remap',
       rasterFunctionArguments: {
@@ -110,7 +140,7 @@ const evtRule = {
   }
 };
 const evtLayer = L.esri.imageMapLayer({
-  url: EVT_URL, format:'png32', f:'image', opacity:0.75,
+  url: EVT_URL, format:'png32', f:'image', opacity:0.85,
   renderingRule: evtRule, attribution: 'LANDFIRE (USGS/USFS)'
 });
 

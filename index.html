@@ -63,8 +63,8 @@
       <label style="font-weight:400"><input type="checkbox" id="trHiking" checked> <span class="sw" style="background:#1076C9"></span> Hiking</label>
       <label style="font-weight:400"><input type="checkbox" id="trBike" checked> <span class="sw" style="background:#1076C9;opacity:.55"></span> Bike / multi-use</label>
       <label style="font-weight:400"><input type="checkbox" id="trHorse" checked> <span class="sw" style="background:#1076C9;opacity:.3"></span> Equestrian</label>
-      <label style="font-weight:400"><input type="checkbox" id="trMoto" checked> <span class="sw" style="background:#c9531b"></span> Motorized / OHV</label>
-      <label style="font-weight:400"><input type="checkbox" id="trRoad" checked> <span class="sw" style="background:#7a7a7a"></span> Roads</label>
+      <label style="font-weight:400"><input type="checkbox" id="trMoto" checked> <span class="sw" style="background:#3949ab"></span> Motorized / OHV</label>
+      <label style="font-weight:400"><input type="checkbox" id="trRoad" checked> <span class="sw" style="background:#4a4a4a"></span> Forest Service roads</label>
     </div>
 
     <div class="row">
@@ -169,8 +169,12 @@ const evtLayer = L.esri.imageMapLayer({
 
 // COTREX trails — split into use-type categories, each its own toggleable
 // layer with a distinct rendering (mostly dash-pattern variants on the same
-// blue, plus a contrasting color for motorized routes and a muted one for
-// roads), since a single trail can carry several "yes" activity flags at once.
+// blue, plus indigo for motorized routes — kept clear of the aspen layers'
+// orange/green/inferno palette — and dark gray for Forest Service roads),
+// since a single trail can carry several "yes" activity flags at once.
+// Roads are scoped to Forest Service–managed roads only (manager =
+// 'United States Forest Service' or a 'USFS ... Ranger District'), since
+// COTREX's generic "Road" type otherwise sweeps in county/city/BLM roads too.
 const trailPopupHtml = p => {
   const ft = v => v != null ? Math.round(v).toLocaleString() + ' ft' : '—';
   return `<b>${p.name || 'Unnamed trail'}</b><br>
@@ -184,8 +188,8 @@ const trailCategories = [
   { id:'trHiking', where:"hiking = 'yes'", style:{ color:'#1076C9', weight:3, opacity:0.65 } },
   { id:'trBike',   where:"bike = 'yes'",   style:{ color:'#1076C9', weight:3, opacity:0.65, dashArray:'7,5' } },
   { id:'trHorse',  where:"horse = 'yes'",  style:{ color:'#1076C9', weight:3, opacity:0.65, dashArray:'1,5,7,5' } },
-  { id:'trMoto',   where:"motorcycle = 'yes' OR atv = 'yes' OR ohv_gt_50 = 'yes'", style:{ color:'#c9531b', weight:3, opacity:0.7, dashArray:'1,6' } },
-  { id:'trRoad',   where:"type = 'Road'",  style:{ color:'#7a7a7a', weight:2, opacity:0.55 } }
+  { id:'trMoto',   where:"motorcycle = 'yes' OR atv = 'yes' OR ohv_gt_50 = 'yes'", style:{ color:'#3949ab', weight:3, opacity:0.75, dashArray:'1,6' } },
+  { id:'trRoad',   where:"type = 'Road' AND (manager = 'United States Forest Service' OR manager LIKE 'USFS%')", style:{ color:'#4a4a4a', weight:2, opacity:0.6 } }
 ];
 
 trailCategories.forEach(cat => {

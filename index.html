@@ -65,7 +65,7 @@
 
     <div class="row">
       <label><input type="checkbox" id="thOn" checked> Trailheads</label>
-      <div class="legend"><span class="sw" style="background:#063563;border-radius:50%"></span>Parking / trailhead</div>
+      <div class="legend"><span class="sw" style="background:#2974DC;border-radius:50%"></span>Parking / trailhead</div>
       <small>Shows at zoom 12+</small>
     </div>
 
@@ -157,7 +157,7 @@ const evtLayer = L.esri.imageMapLayer({
 });
 
 // COTREX trails
-const trailStyle = { color:'#063563', weight:2.2, opacity:0.65 };
+const trailStyle = { color:'#2974DC', weight:3, opacity:0.65 };
 const trails = L.esri.featureLayer({
   url: TR_URL, minZoom: 11, where: "hiking = 'yes'",
   style: () => trailStyle,
@@ -184,10 +184,10 @@ trails.on('createfeature', e => {
 });
 
 // ---- Trailheads (point icons)
-// Navy teardrop map pin with a flat-soled hiking-boot glyph (rounded
+// Blue teardrop map pin with a flat-soled hiking-boot glyph (rounded
 // toe, tall ankle shaft, tongue seam) inset in a white circle.
 const trailheadSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="34" viewBox="0 0 26 34">
-  <path d="M13 0C5.8 0 0 5.8 0 13c0 9.5 13 21 13 21s13-11.5 13-21C26 5.8 20.2 0 13 0z" fill="#063563"/>
+  <path d="M13 0C5.8 0 0 5.8 0 13c0 9.5 13 21 13 21s13-11.5 13-21C26 5.8 20.2 0 13 0z" fill="#2974DC"/>
   <circle cx="13" cy="13" r="9" fill="#ffffff"/>
   <g transform="translate(4.36,5.96) scale(0.16)">
     <path d="M20 80
@@ -200,7 +200,7 @@ const trailheadSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height=
              A10 10 0 0 1 88 18
              L88 80
              L20 80
-             Z" fill="#063563"/>
+             Z" fill="#2974DC"/>
     <path d="M42 44 C45 34 47 22 50 13" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
   </g>
 </svg>`;

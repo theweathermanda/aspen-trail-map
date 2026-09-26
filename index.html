@@ -58,9 +58,13 @@
     </div>
 
     <div class="row">
-      <label><input type="checkbox" id="trOn" checked> COTREX trails</label>
-      <label style="font-weight:400;margin-left:24px"><input type="checkbox" id="hikeOnly"> Hiking-allowed only</label>
-      <small>Loads at zoom 11+ · names show at zoom 13+</small>
+      <label style="margin-bottom:2px">COTREX trails</label>
+      <small style="display:block;margin:0 0 6px">Loads at zoom 11+ · names show at zoom 13+</small>
+      <label style="font-weight:400"><input type="checkbox" id="trHiking" checked> <span class="sw" style="background:#1076C9"></span> Hiking</label>
+      <label style="font-weight:400"><input type="checkbox" id="trBike" checked> <span class="sw" style="background:#1076C9;opacity:.55"></span> Bike / multi-use</label>
+      <label style="font-weight:400"><input type="checkbox" id="trHorse" checked> <span class="sw" style="background:#1076C9;opacity:.3"></span> Equestrian</label>
+      <label style="font-weight:400"><input type="checkbox" id="trMoto" checked> <span class="sw" style="background:#c9531b"></span> Motorized / OHV</label>
+      <label style="font-weight:400"><input type="checkbox" id="trRoad" checked> <span class="sw" style="background:#7a7a7a"></span> Roads</label>
     </div>
 
     <div class="row">
@@ -163,8 +167,10 @@ const evtLayer = L.esri.imageMapLayer({
   renderingRule: evtRule, attribution: 'LANDFIRE (USGS/USFS)'
 }).addTo(map);
 
-// COTREX trails
-const trailStyle = { color:'#1076C9', weight:3, opacity:0.65 };
+// COTREX trails — split into use-type categories, each its own toggleable
+// layer with a distinct rendering (mostly dash-pattern variants on the same
+// blue, plus a contrasting color for motorized routes and a muted one for
+// roads), since a single trail can carry several "yes" activity flags at once.
 const trailPopupHtml = p => {
   const ft = v => v != null ? Math.round(v).toLocaleString() + ' ft' : '—';
   return `<b>${p.name || 'Unnamed trail'}</b><br>
@@ -173,36 +179,53 @@ const trailPopupHtml = p => {
     Surface: ${p.surface || '—'} · Manager: ${p.manager || '—'}
     ${p.url ? `<br><a href="${p.url}" target="_blank" rel="noopener">More info</a>` : ''}`;
 };
-const trails = L.esri.featureLayer({
-  url: TR_URL, minZoom: 11, where: '1=1',
-  style: () => trailStyle,
-  fields: ['FID','name','surface','hiking','length_mi_','min_elevat','max_elevat','manager','url'],
-  attribution: 'Colorado Parks & Wildlife COTREX'
-}).addTo(map);
-trails.bindPopup(l => trailPopupHtml(l.feature.properties));
+const TRAIL_FIELDS = ['FID','name','surface','hiking','horse','bike','motorcycle','atv','ohv_gt_50','type','length_mi_','min_elevat','max_elevat','manager','url'];
+const trailCategories = [
+  { id:'trHiking', where:"hiking = 'yes'", style:{ color:'#1076C9', weight:3, opacity:0.65 } },
+  { id:'trBike',   where:"bike = 'yes'",   style:{ color:'#1076C9', weight:3, opacity:0.65, dashArray:'7,5' } },
+  { id:'trHorse',  where:"horse = 'yes'",  style:{ color:'#1076C9', weight:3, opacity:0.65, dashArray:'1,5,7,5' } },
+  { id:'trMoto',   where:"motorcycle = 'yes' OR atv = 'yes' OR ohv_gt_50 = 'yes'", style:{ color:'#c9531b', weight:3, opacity:0.7, dashArray:'1,6' } },
+  { id:'trRoad',   where:"type = 'Road'",  style:{ color:'#7a7a7a', weight:2, opacity:0.55 } }
+];
 
-// Trail name labels — bound to every trail feature, but kept invisible
-// until the map is zoomed in enough to read them (toggled via CSS below).
-trails.on('createfeature', e => {
-  const layer = trails._layers[e.id];
-  const name = e.feature.properties.name;
-  if (layer && name) {
-    layer.bindTooltip(name, { permanent:true, direction:'center', className:'trail-label', sticky:false });
-  }
-});
+trailCategories.forEach(cat => {
+  const layer = L.esri.featureLayer({
+    url: TR_URL, minZoom: 11, where: cat.where,
+    style: () => cat.style,
+    fields: TRAIL_FIELDS,
+    attribution: 'Colorado Parks & Wildlife COTREX'
+  }).addTo(map);
+  layer.bindPopup(l => trailPopupHtml(l.feature.properties));
 
-// A much wider, fully invisible line drawn under each trail, so tapping/clicking
-// near a trail (not just exactly on its thin visual stroke) opens its popup.
-// Rebuilt from whatever's currently loaded every time the layer reloads (pan,
-// zoom, or the "hiking-allowed only" filter toggling), so it never goes stale.
-const trailHits = L.layerGroup().addTo(map);
-trails.on('load', () => {
-  trailHits.clearLayers();
-  trails.eachFeature(layer => {
-    L.geoJSON(layer.feature, { style: () => ({ color:'#000', weight:22, opacity:0 }) })
-      .bindPopup(trailPopupHtml(layer.feature.properties))
-      .addTo(trailHits);
+  // Trail name labels — bound to every feature, kept invisible until the
+  // map is zoomed in enough to read them (toggled via CSS below).
+  layer.on('createfeature', e => {
+    const featLayer = layer._layers[e.id];
+    const name = e.feature.properties.name;
+    if (featLayer && name) {
+      featLayer.bindTooltip(name, { permanent:true, direction:'center', className:'trail-label', sticky:false });
+    }
   });
+
+  // A much wider, fully invisible line under each trail, so tapping/clicking
+  // near it (not just exactly on its thin visual stroke) opens its popup.
+  // Rebuilt from whatever's currently loaded every time the layer reloads.
+  const hits = L.layerGroup().addTo(map);
+  layer.on('load', () => {
+    hits.clearLayers();
+    layer.eachFeature(featLayer => {
+      L.geoJSON(featLayer.feature, { style: () => ({ color:'#000', weight:22, opacity:0 }) })
+        .bindPopup(trailPopupHtml(featLayer.feature.properties))
+        .addTo(hits);
+    });
+  });
+
+  cat.layer = layer;
+  cat.hits = hits;
+  document.getElementById(cat.id).onchange = e => {
+    if (e.target.checked) { layer.addTo(map); hits.addTo(map); }
+    else { map.removeLayer(layer); map.removeLayer(hits); }
+  };
 });
 
 // ---- Trailheads (point icons)
@@ -249,12 +272,7 @@ const bind = (chk, layer, op) => {
   if (op) document.getElementById(op).oninput = e => layer.setOpacity(+e.target.value);
 };
 bind('baOn', baLayer, 'baOp'); bind('evtOn', evtLayer, 'evtOp');
-document.getElementById('trOn').onchange = e => {
-  if (e.target.checked) { trails.addTo(map); trailHits.addTo(map); }
-  else { map.removeLayer(trails); map.removeLayer(trailHits); }
-};
 document.getElementById('thOn').onchange = e => e.target.checked ? trailheads.addTo(map) : map.removeLayer(trailheads);
-document.getElementById('hikeOnly').onchange = e => trails.setWhere(e.target.checked ? "hiking = 'yes'" : '1=1');
 
 const LABEL_ZOOM = 13;
 const status = document.getElementById('status');
